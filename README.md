@@ -1,5 +1,4 @@
-# inv_vae
-Motion-invariant variational auto-encoding of brain structural connectomes
+# Motion-invariant variational auto-encoding of brain structural connectomes
 
 Create conda environment and install packages:
 ```
