@@ -4,11 +4,11 @@ from torch.nn import functional as F
 from torch.autograd import Variable
 
 from inv_vae.models.graph_conv import GraphConv
-        
+from inv_vae.utils.inv_loss import kl_conditional_and_marg        
 
 class INV_VAE(nn.Module):
     '''
-    motion-invariant variational auto-encoders. 
+    invariant variational auto-encoders. 
     ----
     inputs:
     
@@ -21,9 +21,13 @@ class INV_VAE(nn.Module):
         self.n_nodes = config.n_nodes
         self.latent_dim = config.latent_dim
         self.hidden_dim = config.hidden_dim
+        self.nuisance_dim = config.nuisance_dim
         self.n_enc_layers = config.n_enc_layers
         self.n_dec_layers = config.n_dec_layers
         self.drop_out = config.drop_out
+        self.alpha = config.alpha
+        self.beta = config.beta
+        self.gamma = config.gamma
         
         # encoder layers (inference model)
         self.W = Variable(torch.randn(self.n_dec_layers, 1), requires_grad=True)  # add cuda() if gpu available
@@ -35,7 +39,7 @@ class INV_VAE(nn.Module):
         self.encoder = nn.Sequential(*enc_layers)
 
         # decoder layers (generative model)        
-        self.dec_layers = [nn.Linear(self.latent_dim, self.n_nodes) for i in range(self.n_dec_layers)]
+        self.dec_layers = [nn.Linear(self.latent_dim+self.nuisance_dim, self.n_nodes) for i in range(self.n_dec_layers)]
         
         # graph convolution layers
         self.gc_layers = [GraphConv(self.n_nodes, self.n_nodes) for i in range(self.n_dec_layers)]
@@ -52,8 +56,9 @@ class INV_VAE(nn.Module):
         eps = torch.randn_like(sd)
         return mu + eps * sd
 
-    def decode(self, z_input):
-        dec_out = [torch.sigmoid(self.dec_layers[i](z_input)) for i in range(self.n_dec_layers)]    
+    def decode(self, z_input, c_input):
+        z_c_input = torch.cat((z_input, c_input), -1)
+        dec_out = [torch.sigmoid(self.dec_layers[i](z_c_input)) for i in range(self.n_dec_layers)]    
         gc_out = [torch.sigmoid(self.gc_layers[i](dec_out[i])) for i in range(self.n_dec_layers)]     
         bmm_out = [torch.bmm(gc_out[i].unsqueeze(2), gc_out[i].unsqueeze(1)).view(-1, self.n_nodes*self.n_nodes, 1) \
                       for i in range(self.n_dec_layers)] 
@@ -63,10 +68,10 @@ class INV_VAE(nn.Module):
         output = torch.exp(self.fc(output))
         return output
 
-    def forward(self, x_input):
+    def forward(self, x_input, c_input):
         mu, logvar = self.encode(x_input.view(-1, self.n_nodes*self.n_nodes))
         z_sample = self.reparameterize(mu, logvar)
-        x_output = self.decode(z_sample)
+        x_output = self.decode(z_sample, c_input)
         return x_output, mu, logvar
 
     def set_mask(self, masks):
@@ -76,28 +81,33 @@ class INV_VAE(nn.Module):
     def loss(self, x_output, x_input, mu, logvar):
         nll = F.poisson_nll_loss(x_output, x_input.view(-1, self.n_nodes*self.n_nodes), reduction='sum', log_input=False)
         kl = -.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        loss = nll + kl 
-        return loss, nll, kl
+        inv_loss = kl_conditional_and_marg(mu, logvar, self.latent_dim)
+        loss = self.alpha * nll + self.beta * kl + self.gamma * inv_loss
+        return loss, nll, kl, inv_loss
     
     def custom_train(self, epoch, train_loader, model, optimizer, device, n_epoch_display=5):
         model.train()
         tot_loss = 0
         tot_nll = 0
         tot_kl = 0
+        tot_inv_loss = 0
         n = len(train_loader.dataset)
-        for batch_idx, batch_x in enumerate(train_loader):
-            x_input = batch_x[0].to(device)
+        for batch_idx, (batch_x, batch_c) in enumerate(train_loader):
+            x_input = batch_x.to(device)
+            c_input = batch_c.to(device)
             optimizer.zero_grad()
-            x_output, mu, logvar = model(x_input)
-            loss, nll, kl = model.loss(x_output, x_input, mu, logvar) 
+            x_output, mu, logvar = model(x_input, c_input)
+            loss, nll, kl, inv_loss = model.loss(x_output, x_input, mu, logvar) 
             loss.backward()
             tot_loss += loss.item()
             tot_nll += nll.item()
             tot_kl += kl.item()
+            tot_inv_loss += inv_loss.item()
             optimizer.step()
-        losses = [[tot_loss/n], [tot_nll/n], [tot_kl/n]]
+        losses = [[tot_loss/n], [tot_nll/n], [tot_kl/n], [tot_inv_loss/n]]
         if (epoch % n_epoch_display) == 0:
-            print('epoch: {} train loss: {:.3f} nll: {:.3f} kl: {:.3f}'.format(epoch, tot_loss/n, tot_nll/n, tot_kl/n))
+            print('epoch: {} train loss: {:.3f} nll: {:.3f} kl: {:.3f} inv_loss: {:.3f}'.format(
+                epoch, tot_loss/n, tot_nll/n, tot_kl/n, tot_inv_loss/n))
         return losses
     
     def custom_test(self, epoch, test_loader, model, device, n_epoch_display=5):
@@ -105,17 +115,21 @@ class INV_VAE(nn.Module):
         test_loss = 0
         test_nll = 0
         test_kl = 0
+        test_inv_loss = 0
         n = len(test_loader.dataset)
         with torch.no_grad():
-            for batch_idx, batch_x in enumerate(test_loader):
-                x_input = batch_x[0].to(device)
-                x_output, mu, logvar = model(x_input)
-                loss, nll, kl = model.loss(x_output, x_input, mu, logvar) 
+            for batch_idx, (batch_x, batch_c) in enumerate(test_loader):
+                x_input = batch_x.to(device)
+                c_input = batch_c.to(device)
+                x_output, mu, logvar = model(x_input, c_input)
+                loss, nll, kl, inv_loss = model.loss(x_output, x_input, mu, logvar) 
                 test_loss += loss.item()
                 test_nll += nll.item()
                 test_kl += kl.item()
-            losses = [[test_loss/n], [test_nll/n], [test_nll/n]]
+                test_inv_loss += inv_loss.item()
+            losses = [[test_loss/n], [test_nll/n], [test_nll/n], [test_inv_loss/n]]
             if (epoch % n_epoch_display) == 0:
-                print('epoch: {} test loss {:.3f} nll: {:.3f} kl: {:.3f}'.format(epoch, test_loss/n, test_nll/n, test_kl/n))
+                print('epoch: {} test loss {:.3f} nll: {:.3f} kl: {:.3f} inv_loss: {:.3f}'.format(
+                    epoch, test_loss/n, test_nll/n, test_kl/n, test_inv_loss/n))
         return losses
     

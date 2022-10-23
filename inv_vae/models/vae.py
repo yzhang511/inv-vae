@@ -24,6 +24,8 @@ class VAE(nn.Module):
         self.n_enc_layers = config.n_enc_layers
         self.n_dec_layers = config.n_dec_layers
         self.drop_out = config.drop_out
+        self.alpha=config.alpha
+        self.beta=config.beta
         
         # encoder layers (inference model)
         self.W = Variable(torch.randn(self.n_dec_layers, 1), requires_grad=True)  # add cuda() if gpu available
@@ -76,7 +78,7 @@ class VAE(nn.Module):
     def loss(self, x_output, x_input, mu, logvar):
         nll = F.poisson_nll_loss(x_output, x_input.view(-1, self.n_nodes*self.n_nodes), reduction='sum', log_input=False)
         kl = -.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        loss = nll + kl 
+        loss = self.alpha * nll + self.beta * kl 
         return loss, nll, kl
     
     def custom_train(self, epoch, train_loader, model, optimizer, device, n_epoch_display=5):
@@ -85,8 +87,8 @@ class VAE(nn.Module):
         tot_nll = 0
         tot_kl = 0
         n = len(train_loader.dataset)
-        for batch_idx, batch_x in enumerate(train_loader):
-            x_input = batch_x[0].to(device)
+        for batch_idx, (batch_x, _) in enumerate(train_loader):
+            x_input = batch_x.to(device)
             optimizer.zero_grad()
             x_output, mu, logvar = model(x_input)
             loss, nll, kl = model.loss(x_output, x_input, mu, logvar) 
@@ -107,8 +109,8 @@ class VAE(nn.Module):
         test_kl = 0
         n = len(test_loader.dataset)
         with torch.no_grad():
-            for batch_idx, batch_x in enumerate(test_loader):
-                x_input = batch_x[0].to(device)
+            for batch_idx, (batch_x, _) in enumerate(test_loader):
+                x_input = batch_x.to(device)
                 x_output, mu, logvar = model(x_input)
                 loss, nll, kl = model.loss(x_output, x_input, mu, logvar) 
                 test_loss += loss.item()
