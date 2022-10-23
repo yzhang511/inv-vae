@@ -7,7 +7,7 @@ conda create -n inv_vae python=3.8
 conda install --file requirements.txt
 ```
 
-For jupyter lab (install `node` if you have not done so):
+For jupyter lab (need to install `nodejs`):
 ```
 pip install jupyterlab jupytext
 conda install -c "conda-forge/label/cf202003" nodejs
