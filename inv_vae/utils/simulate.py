@@ -2,7 +2,7 @@ import numpy as np
 import networkx as nx
 
 def simulate_networks(n_nets=1000, n_nodes=68, p_in=.25, p_out=.01, seed=None,
-                      n_noisy_nets=100, noise_level=1.5, noise_sd=0.01):
+                      n_noisy_nets=100, noise_level=.5, noise_sd=.01):
     '''
     simulate noise-free and noise-affected random community networks.
     ----
@@ -39,8 +39,10 @@ def simulate_networks(n_nets=1000, n_nodes=68, p_in=.25, p_out=.01, seed=None,
     for i in range(n_nets):
         G = nx.random_partition_graph([n_nodes//2, n_nodes//2], p_in, p_out)
         A = nx.to_scipy_sparse_matrix(G).todense().reshape(n_nodes, n_nodes)
+        sim_A = np.matmul(A, A)
+        sim_A[range(n_nodes), range(n_nodes)] = 0
         noisy_A = np.matmul(noises[i]*A, noises[i]*A)
         noisy_A[range(n_nodes), range(n_nodes)] = 0
-        sim_nets.append(A)
+        sim_nets.append(sim_A)
         noisy_nets.append(noisy_A)
     return np.array(sim_nets), np.array(noisy_nets), noises, noise_ids
