@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -98,7 +99,7 @@ class INV_VAE(nn.Module):
         nll = F.poisson_nll_loss(x_output, x_input.view(-1, self.n_nodes*self.n_nodes), reduction='sum', log_input=False)
         kl = -.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         inv_loss = kl_conditional_and_marg(mu, logvar, self.latent_dim)
-        mse = F.mse_loss(y_output, y_input, reduction='sum')
+        mse = F.mse_loss(y_output.view(-1,1), y_input.view(-1,1), reduction='sum')
         loss = self.alpha * nll + self.beta * kl + self.gamma * inv_loss + mse
         return loss, nll, kl, inv_loss, mse
     
@@ -156,7 +157,7 @@ class INV_VAE(nn.Module):
         tot_nll = 0
         tot_kl = 0
         tot_inv_loss = 0
-        tot_mse = 0
+        tot_rmse = 0
         n = len(train_loader.dataset)
         for batch_idx, (batch_x, batch_c, batch_y) in enumerate(train_loader):
             x_input = batch_x.to(device)
@@ -170,12 +171,12 @@ class INV_VAE(nn.Module):
             tot_nll += nll.item()
             tot_kl += kl.item()
             tot_inv_loss += inv_loss.item()
-            tot_mse += mse.item()
+            tot_rmse += np.sqrt(mse.item())
             optimizer.step()
         if (epoch % n_epoch_display) == 0:
-            print('epoch: {} train loss: {:.3f} nll: {:.3f} kl: {:.3f} inv_loss: {:.3f} mse: {:.3f}'.format(
-                epoch, tot_loss/n, tot_nll/n, tot_kl/n, tot_inv_loss/n, tot_mse/n))
-        losses = [[tot_loss/n], [tot_nll/n], [tot_kl/n], [tot_inv_loss/n], [tot_mse/n]]
+            print('epoch: {} train loss: {:.3f} nll: {:.3f} kl: {:.3f} inv_loss: {:.3f} rmse: {:.3f}'.format(
+                epoch, tot_loss/n, tot_nll/n, tot_kl/n, tot_inv_loss/n, tot_rmse/n))
+        losses = [[tot_loss/n], [tot_nll/n], [tot_kl/n], [tot_inv_loss/n], [tot_rmse/n]]
         return losses
     
     def reg_test(self, epoch, test_loader, model, device, n_epoch_display=5):
@@ -184,7 +185,7 @@ class INV_VAE(nn.Module):
         tot_nll = 0
         tot_kl = 0
         tot_inv_loss = 0
-        tot_mse = 0
+        tot_rmse = 0
         n = len(test_loader.dataset)
         with torch.no_grad():
             for batch_idx, (batch_x, batch_c, batch_y) in enumerate(test_loader):
@@ -192,16 +193,16 @@ class INV_VAE(nn.Module):
                 c_input = batch_c.to(device)
                 y_input = batch_y.to(device)
                 x_output, y_output, mu, logvar = model(x_input, c_input)
-                loss, nll, kl, inv_loss, mse = model.loss(x_output, x_input, y_output, y_input, mu, logvar) 
+                loss, nll, kl, inv_loss, mse = model.reg_loss(x_output, x_input, y_output, y_input, mu, logvar) 
                 tot_loss += loss.item()
                 tot_nll += nll.item()
                 tot_kl += kl.item()
                 tot_inv_loss += inv_loss.item()
-                tot_mse += mse.item()
+                tot_rmse += np.sqrt(mse.item())
         if (epoch % n_epoch_display) == 0:
-            print('epoch: {} test loss {:.3f} nll: {:.3f} kl: {:.3f} inv_loss: {:.3f} mse: {:.3f}'.format(
-                epoch, tot_loss/n, tot_nll/n, tot_kl/n, tot_inv_loss/n, tot_mse/n))
-        losses = [[tot_loss/n], [tot_nll/n], [tot_kl/n], [tot_inv_loss/n], [tot_mse/n]]
+            print('epoch: {} test loss {:.3f} nll: {:.3f} kl: {:.3f} inv_loss: {:.3f} rmse: {:.3f}'.format(
+                epoch, tot_loss/n, tot_nll/n, tot_kl/n, tot_inv_loss/n, tot_rmse/n))
+        losses = [[tot_loss/n], [tot_nll/n], [tot_kl/n], [tot_inv_loss/n], [tot_rmse/n]]
         return losses
     
     
