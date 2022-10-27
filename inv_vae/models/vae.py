@@ -183,6 +183,6 @@ class VAE(nn.Module):
                 tot_rmse += np.sqrt(mse.item())
             losses = [[tot_loss/n], [tot_nll/n], [tot_kl/n], [tot_rmse/n]]
             if (epoch % n_epoch_display) == 0:
-                print('epoch: {} train loss: {:.3f} nll: {:.3f} kl: {:.3f} rmse: {:.3f}'.format(
+                print('epoch: {} test loss: {:.3f} nll: {:.3f} kl: {:.3f} rmse: {:.3f}'.format(
                     epoch, tot_loss/n, tot_nll/n, tot_kl/n, tot_rmse/n) )
         return losses
