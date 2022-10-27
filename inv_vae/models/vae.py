@@ -29,10 +29,14 @@ class VAE(nn.Module):
         self.beta=config.beta
         self.add_reg = config.add_reg
         self.y_dim = config.y_dim
+        self.device = config.device
         
         # encoder layers (inference model)
         self.W = Variable(torch.randn(self.n_dec_layers, 1), requires_grad=True)  # add cuda() if gpu available
         self.b = Variable(torch.randn(self.latent_dim * self.latent_dim), requires_grad=True) # add cuda() if gpu available
+        if 'cuda' in self.device.type:
+            self.W = self.W.cuda()
+            self.b = self.b.cuda()
         enc_layers = [nn.Linear(self.latent_dim * self.latent_dim, self.hidden_dim) for i in range(self.n_enc_layers)]
         self.enc_mu = nn.Linear(self.hidden_dim, self.latent_dim)
         self.enc_logvar = nn.Linear(self.hidden_dim, self.latent_dim)
@@ -40,10 +44,10 @@ class VAE(nn.Module):
         self.encoder = nn.Sequential(*enc_layers)
 
         # decoder layers (generative model)        
-        self.dec_layers = [nn.Linear(self.latent_dim, self.n_nodes) for i in range(self.n_dec_layers)]
+        self.dec_layers = [nn.Linear(self.latent_dim, self.n_nodes).to(self.device) for i in range(self.n_dec_layers)]
         
         # graph convolution layers
-        self.gc_layers = [GraphConv(self.n_nodes, self.n_nodes) for i in range(self.n_dec_layers)]
+        self.gc_layers = [GraphConv(self.n_nodes, self.n_nodes, config.device).to(self.device) for i in range(self.n_dec_layers)]
         
         self.fc = nn.Linear(self.n_nodes*self.n_nodes, self.n_nodes*self.n_nodes)
         
