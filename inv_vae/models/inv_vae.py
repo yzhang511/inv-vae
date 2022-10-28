@@ -67,7 +67,7 @@ class INV_VAE(nn.Module):
         return mu + eps * sd
 
     def decode(self, z_input, c_input):
-        z_c_input = torch.cat((z_input, c_input), -1)
+        z_c_input = torch.cat((z_input, c_input), -1).to(self.device)
         dec_out = [torch.sigmoid(self.dec_layers[i](z_c_input)) for i in range(self.n_dec_layers)]    
         gc_out = [torch.sigmoid(self.gc_layers[i](dec_out[i])) for i in range(self.n_dec_layers)]     
         bmm_out = [torch.bmm(gc_out[i].unsqueeze(2), gc_out[i].unsqueeze(1)).view(-1, self.n_nodes*self.n_nodes, 1) \
