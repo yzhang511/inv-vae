@@ -103,7 +103,6 @@ class INV_VAE(nn.Module):
         kl = -.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         inv_loss = kl_conditional_and_marg(mu, logvar, self.latent_dim)
         mse = F.mse_loss(y_output.view(-1,1), y_input.view(-1,1), reduction='sum')
-        # loss = .5*(1+self.gamma) * nll + self.beta * kl + self.gamma * inv_loss + mse
         loss = self.gamma * nll + (self.beta+self.gamma) * inv_loss + mse
         return loss, nll, kl, inv_loss, mse
     
