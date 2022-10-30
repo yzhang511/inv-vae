@@ -26,7 +26,6 @@ class INV_VAE(nn.Module):
         self.n_enc_layers = config.n_enc_layers
         self.n_dec_layers = config.n_dec_layers
         self.drop_out = config.drop_out
-        self.alpha = config.alpha
         self.beta = config.beta
         self.gamma = config.gamma
         self.add_reg = config.add_reg
@@ -96,7 +95,7 @@ class INV_VAE(nn.Module):
         nll = F.poisson_nll_loss(x_output, x_input.view(-1, self.n_nodes*self.n_nodes), reduction='sum', log_input=False)
         kl = -.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         inv_loss = kl_conditional_and_marg(mu, logvar, self.latent_dim)
-        loss = self.alpha * nll + self.beta * kl + self.gamma * inv_loss
+        loss = .5*(1+self.gamma) * nll + self.beta * kl + self.gamma * inv_loss
         return loss, nll, kl, inv_loss
     
     def reg_loss(self, x_output, x_input, y_output, y_input, mu, logvar):
@@ -104,7 +103,8 @@ class INV_VAE(nn.Module):
         kl = -.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         inv_loss = kl_conditional_and_marg(mu, logvar, self.latent_dim)
         mse = F.mse_loss(y_output.view(-1,1), y_input.view(-1,1), reduction='sum')
-        loss = self.alpha * nll + self.beta * kl + self.gamma * inv_loss + mse
+        # loss = .5*(1+self.gamma) * nll + self.beta * kl + self.gamma * inv_loss + mse
+        loss = self.gamma * nll + (self.beta+self.gamma) * inv_loss + mse
         return loss, nll, kl, inv_loss, mse
     
     def custom_train(self, epoch, train_loader, model, optimizer, device, n_epoch_display=5):

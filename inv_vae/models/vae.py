@@ -25,7 +25,6 @@ class VAE(nn.Module):
         self.n_enc_layers = config.n_enc_layers
         self.n_dec_layers = config.n_dec_layers
         self.drop_out = config.drop_out
-        self.alpha=config.alpha
         self.beta=config.beta
         self.add_reg = config.add_reg
         self.y_dim = config.y_dim
@@ -93,14 +92,14 @@ class VAE(nn.Module):
     def loss(self, x_output, x_input, mu, logvar):
         nll = F.poisson_nll_loss(x_output, x_input.view(-1, self.n_nodes*self.n_nodes), reduction='sum', log_input=False)
         kl = -.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        loss = self.alpha * nll + self.beta * kl 
+        loss = nll + self.beta * kl 
         return loss, nll, kl
     
     def reg_loss(self, x_output, x_input, y_output, y_input, mu, logvar):
         nll = F.poisson_nll_loss(x_output, x_input.view(-1, self.n_nodes*self.n_nodes), reduction='sum', log_input=False)
         kl = -.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         mse = F.mse_loss(y_output.view(-1,1), y_input.view(-1,1), reduction='sum')
-        loss = self.alpha * nll + self.beta * kl + mse
+        loss = nll + self.beta * kl + mse
         return loss, nll, kl, mse
     
     def custom_train(self, epoch, train_loader, model, optimizer, device, n_epoch_display=5):
