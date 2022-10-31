@@ -26,15 +26,18 @@ class INV_VAE(nn.Module):
         self.n_enc_layers = config.n_enc_layers
         self.n_dec_layers = config.n_dec_layers
         self.drop_out = config.drop_out
-        self.alpha = config.alpha
         self.beta = config.beta
         self.gamma = config.gamma
         self.add_reg = config.add_reg
         self.y_dim = config.y_dim
+        self.device = config.device
         
         # encoder layers (inference model)
         self.W = Variable(torch.randn(self.n_dec_layers, 1), requires_grad=True)  # add cuda() if gpu available
         self.b = Variable(torch.randn(self.latent_dim * self.latent_dim), requires_grad=True) # add cuda() if gpu available
+        if 'cuda' in self.device.type:
+            self.W = self.W.cuda()
+            self.b = self.b.cuda()
         enc_layers = [nn.Linear(self.latent_dim * self.latent_dim, self.hidden_dim) for i in range(self.n_enc_layers)]
         self.enc_mu = nn.Linear(self.hidden_dim, self.latent_dim)
         self.enc_logvar = nn.Linear(self.hidden_dim, self.latent_dim)
@@ -42,10 +45,10 @@ class INV_VAE(nn.Module):
         self.encoder = nn.Sequential(*enc_layers)
 
         # decoder layers (generative model)        
-        self.dec_layers = [nn.Linear(self.latent_dim+self.nuisance_dim, self.n_nodes) for i in range(self.n_dec_layers)]
+        self.dec_layers = [nn.Linear(self.latent_dim+self.nuisance_dim, self.n_nodes).to(self.device) for i in range(self.n_dec_layers)]
         
         # graph convolution layers
-        self.gc_layers = [GraphConv(self.n_nodes, self.n_nodes) for i in range(self.n_dec_layers)]
+        self.gc_layers = [GraphConv(self.n_nodes, self.n_nodes, config.device).to(self.device) for i in range(self.n_dec_layers)]
         
         self.fc = nn.Linear(self.n_nodes*self.n_nodes, self.n_nodes*self.n_nodes)
         
@@ -63,7 +66,7 @@ class INV_VAE(nn.Module):
         return mu + eps * sd
 
     def decode(self, z_input, c_input):
-        z_c_input = torch.cat((z_input, c_input), -1)
+        z_c_input = torch.cat((z_input, c_input), -1).to(self.device)
         dec_out = [torch.sigmoid(self.dec_layers[i](z_c_input)) for i in range(self.n_dec_layers)]    
         gc_out = [torch.sigmoid(self.gc_layers[i](dec_out[i])) for i in range(self.n_dec_layers)]     
         bmm_out = [torch.bmm(gc_out[i].unsqueeze(2), gc_out[i].unsqueeze(1)).view(-1, self.n_nodes*self.n_nodes, 1) \
@@ -92,7 +95,7 @@ class INV_VAE(nn.Module):
         nll = F.poisson_nll_loss(x_output, x_input.view(-1, self.n_nodes*self.n_nodes), reduction='sum', log_input=False)
         kl = -.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         inv_loss = kl_conditional_and_marg(mu, logvar, self.latent_dim)
-        loss = self.alpha * nll + self.beta * kl + self.gamma * inv_loss
+        loss = .5*(1+self.gamma) * nll + self.beta * kl + self.gamma * inv_loss
         return loss, nll, kl, inv_loss
     
     def reg_loss(self, x_output, x_input, y_output, y_input, mu, logvar):
@@ -100,7 +103,7 @@ class INV_VAE(nn.Module):
         kl = -.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         inv_loss = kl_conditional_and_marg(mu, logvar, self.latent_dim)
         mse = F.mse_loss(y_output.view(-1,1), y_input.view(-1,1), reduction='sum')
-        loss = self.alpha * nll + self.beta * kl + self.gamma * inv_loss + mse
+        loss = self.gamma * nll + (self.beta+self.gamma) * inv_loss + mse
         return loss, nll, kl, inv_loss, mse
     
     def custom_train(self, epoch, train_loader, model, optimizer, device, n_epoch_display=5):

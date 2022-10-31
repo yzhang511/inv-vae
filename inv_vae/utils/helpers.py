@@ -17,6 +17,15 @@ def to_var(x, requires_grad=False, volatile=False):
         x = x.cuda()
     return Variable(x, requires_grad=requires_grad, volatile=volatile) 
 
+def reset_weights(model):
+    '''
+    try resetting model weights to avoid weight leakage.
+    '''
+    for layer in model.children():
+        if hasattr(layer, 'reset_parameters'):
+            # print(f'reset trainable parameters of layer = {layer}')
+            layer.reset_parameters()
+
 
 def preprocess_neural_data(data_path):
     '''
