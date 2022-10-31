@@ -4,6 +4,7 @@ create conda environment and install packages:
 ```
 conda create -n inv_vae python=3.8
 conda install --file requirements.txt
+python setup.py install
 ```
 
 for jupyter lab (need to install `nodejs`):
