@@ -4,5 +4,5 @@ scipy
 scikit-learn
 matplotlib
 networkx
-pytorch
+torch
 torchvision 
