@@ -38,17 +38,23 @@ class INV_VAE(nn.Module):
         if 'cuda' in self.device.type:
             self.W = self.W.cuda()
             self.b = self.b.cuda()
-        enc_layers = [nn.Linear(self.latent_dim * self.latent_dim, self.hidden_dim) for i in range(self.n_enc_layers)]
+        enc_layers = nn.ParameterList(
+            [nn.Linear(self.latent_dim * self.latent_dim, self.hidden_dim) for i in range(self.n_enc_layers)]
+        )
         self.enc_mu = nn.Linear(self.hidden_dim, self.latent_dim)
         self.enc_logvar = nn.Linear(self.hidden_dim, self.latent_dim)
         self.enc_drop = nn.Dropout(p=self.drop_out) 
         self.encoder = nn.Sequential(*enc_layers)
 
         # decoder layers (generative model)        
-        self.dec_layers = [nn.Linear(self.latent_dim+self.nuisance_dim, self.n_nodes).to(self.device) for i in range(self.n_dec_layers)]
+        self.dec_layers = nn.ParameterList(
+            [nn.Linear(self.latent_dim+self.nuisance_dim, self.n_nodes).to(self.device) for i in range(self.n_dec_layers)]
+        )
         
         # graph convolution layers
-        self.gc_layers = [GraphConv(self.n_nodes, self.n_nodes, config.device).to(self.device) for i in range(self.n_dec_layers)]
+        self.gc_layers = nn.ParameterList(
+            [GraphConv(self.n_nodes, self.n_nodes, config.device).to(self.device) for i in range(self.n_dec_layers)]
+        )
         
         self.fc = nn.Linear(self.n_nodes*self.n_nodes, self.n_nodes*self.n_nodes)
         
@@ -207,6 +213,5 @@ class INV_VAE(nn.Module):
                 epoch, tot_loss/n, tot_nll/n, tot_kl/n, tot_inv_loss/n, tot_rmse/n))
         losses = [[tot_loss/n], [tot_nll/n], [tot_kl/n], [tot_inv_loss/n], [tot_rmse/n]]
         return losses
-    
     
     
