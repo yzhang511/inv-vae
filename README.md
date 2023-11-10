@@ -1,4 +1,4 @@
-## motion-invariant variational auto-encoding of brain structural connectomes
+## invariant variational auto-encoding
 
 This repo contains code for running the model in the paper: [Motion-Invariant Variational Auto-Encoding of Brain Structural Connectomes](https://arxiv.org/abs/2212.04535).
 
