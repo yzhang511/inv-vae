@@ -38,7 +38,7 @@ def simulate_networks(n_nets=1000, n_nodes=68, p_in=.25, p_out=.01, seed=None,
     noisy_nets = []
     for i in range(n_nets):
         G = nx.random_partition_graph([n_nodes//2, n_nodes//2], p_in, p_out)
-        A = nx.to_scipy_sparse_matrix(G).todense().reshape(n_nodes, n_nodes)
+        A = nx.to_scipy_sparse_array(G).todense().reshape(n_nodes, n_nodes)
         sim_A = np.matmul(A, A)
         sim_A[range(n_nodes), range(n_nodes)] = 0
         noisy_A = np.matmul(noises[i]*A, noises[i]*A)
