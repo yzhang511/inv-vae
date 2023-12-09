@@ -46,6 +46,17 @@ pip install -e.
 ```
 <p align="right">(<a href="#readme-top">Back to top</a>)</p>
 
+## ⚡️ Quick Start
+Example usage can be found in [demo](https://github.com/yzhang511/inv-vae/tree/main/demo).
+
+<p align="right">(<a href="#readme-top">Back to top</a>)</p>
+
+<!-- LICENSE -->
+## :classical_building: License
+
+Distributed under the MIT License. See `LICENSE.txt` for more information.
+
+<p align="right">(<a href="#readme-top">Back to top</a>)</p>
 
 ## ✏️ Cite Us
 
